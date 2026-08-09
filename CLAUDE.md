@@ -37,13 +37,25 @@ nix run .#update            # latest release
 nix run .#update -- 17.2.9  # a specific version
 ```
 
-It resolves the tag, downloads the release's `SHA256SUMS.txt` (a few hundred bytes), converts the hex digests to SRI with `basenc`, and rewrites `version` plus all four `hash` fields in `package.nix`. A missing asset name is a hard error that prints the release's actual asset list — upstream has renamed assets before.
+It resolves the tag, downloads the release's `SHA256SUMS.txt` (a few hundred bytes), converts the hex digests to SRI with `basenc`, and rewrites `version` plus every `hash` field in `package.nix`. A missing asset name is a hard error that prints the release's actual asset list — upstream has renamed assets before.
 
-Do **not** go back to `nix store prefetch-file` on the four assets: that downloads roughly 600 MB to recompute digests upstream already publishes. The published sums were verified byte-identical to the previously hand-prefetched hashes.
+The awk pass pairs each `hash` line with the `asset` line above it, so it counts what it rewrote and fails unless that is exactly one version and one hash per entry in the script's `assets` array. Collapse an attrset onto one line and the naive version bumps `version` while leaving every hash stale, exits 0, and hands you a `package.nix` that looks updated. Keep the accounting.
 
-`.github/workflows/update.yml` runs this daily, and opens a PR when `package.nix` changes. `.github/workflows/check.yml` then runs `nix flake check` on all four systems.
+Do **not** go back to `nix store prefetch-file` on the assets: that downloads hundreds of megabytes to recompute digests upstream already publishes. The published sums were verified byte-identical to the previously hand-prefetched hashes.
 
 The `musl`, `windows`, and `browser-relay-extension` assets are intentionally unpackaged.
+
+### CI
+
+`.github/workflows/check.yml` is the only definition of "checked": a per-system matrix running `nix flake check -L` and `nix run .#oh-my-pi -- --version`. It is both an ordinary `push`/`pull_request` workflow and a `workflow_call` reusable one, taking an optional `version` input that applies a pending bump (`nix run .#update -- <version>`) before checking, and an optional `digest` pinning what that bump must produce.
+
+Each leg first asserts `builtins.currentSystem` equals its `matrix.system`. Without that the matrix is decorative: `nix flake check` only ever checks the host, so a runner label that silently changes architecture buys a row of green runs covering one system.
+
+`.github/workflows/update.yml` runs daily at 06:00 UTC in three jobs: `resolve` runs `update.sh` and reports whether `package.nix` moved, `verify` calls `check.yml` with the new version, and `pull-request` opens or updates `update/oh-my-pi`.
+
+The ordering is not decoration. **Pull requests opened with `GITHUB_TOKEN` cannot trigger workflows**, so the PR shows no checks of its own; the verification has to happen in the update run, before the PR exists. Do not "simplify" this back into a single job that opens an unverified PR. Two consequences: the repo setting *Allow GitHub Actions to create and approve pull requests* must stay enabled, and scheduled runs only fire from the default branch, so nothing runs until this lands on `master`.
+
+`resolve` publishes the sha256 of the `package.nix` it produced, and both consumers re-derive the file with `update.sh` and refuse to continue unless it hashes the same. Re-deriving beats passing an artifact around — the script is deterministic given a version — but only the digest makes that assumption enforced rather than assumed: an upstream asset re-uploaded mid-run changes the hashes, diverges from the digest, and fails the run instead of quietly landing a PR nothing verified.
 
 ### Verifying a bump
 
@@ -65,7 +77,7 @@ For a full end-to-end check that the package composes into a system closure, bui
 - **The extracted `.node` is not patchelf'd.** It is unpacked at runtime, after the build, so `autoPatchelfHook` never sees it. This is fine only because it links nothing beyond glibc. If a future release makes that addon depend on more libraries, it will fail at runtime while the build still passes; a wrapper setting `LD_LIBRARY_PATH` would then be required.
 - **Untracked files are invisible to `nix flake check`.** The flake source is the git tree, so a new file must be `git add`-ed before `checks` can see it — otherwise `./tests/module.nix` and friends fail with "path does not exist".
 - **`programs.oh-my-pi.settings` fights `omp config set`.** A managed `~/.omp/agent/config.yml` is a read-only store symlink; runtime persistence then fails. That is why the option defaults to `{}` and leaves the file unmanaged.
-- **`x86_64-darwin` is being retired by nixpkgs, and the symptom depends on the pin.** On `nixos-26.05` it evaluates and only emits a deprecation warning. On nixpkgs 26.11 and later the platform is gone and evaluating that system is a hard error. This is why the input is pinned to a stable branch rather than `nixos-unstable`. The entry is kept because the upstream asset exists; CI marks that matrix leg `continue-on-error`.
+- **`x86_64-darwin` was dropped on purpose; do not re-add it.** nixpkgs is retiring the platform: it evaluates on `nixos-26.05` with a deprecation warning and is a hard error from 26.11 on. The upstream `omp-darwin-x64` asset still exists, which is the tempting part, but supporting it means either staying on a stable pin forever or carrying a leg that cannot be checked. Rosetta covers the remaining users.
 - **Do not add `stdenv.cc.cc.libgcc`** to `buildInputs`. It was tested and is unnecessary; glibc arrives via stdenv.
 - **Hashes are SRI (`sha256-...`), not raw hex.** `update.sh` handles the conversion.
 

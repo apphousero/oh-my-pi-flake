@@ -18,10 +18,6 @@ let
       asset = "omp-linux-arm64";
       hash = "sha256-8Xbt+BdNslKr4apuhN8oThuDuN1+80rH+veISl4XKkw=";
     };
-    x86_64-darwin = {
-      asset = "omp-darwin-x64";
-      hash = "sha256-7eUWJYc7t+WSAHEevkS3dZGaGLRv6SeZWkH5MVqclqo=";
-    };
     aarch64-darwin = {
       asset = "omp-darwin-arm64";
       hash = "sha256-q0/yTIujrm/Z1LVJaclPRAjMMWZ19VNHKa5QLYyX33Q=";
@@ -67,8 +63,6 @@ stdenvNoCC.mkDerivation {
     $out/bin/omp --smoke-test
     runHook postInstallCheck
   '';
-
-  passthru.updateScript = ./update.sh;
 
   meta = {
     description = "AI coding agent for the terminal";

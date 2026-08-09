@@ -11,7 +11,6 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
         "aarch64-darwin"
       ];
 
@@ -26,7 +25,9 @@
       checks = forAllSystems (pkgs: {
         package = self.packages.${pkgs.stdenv.hostPlatform.system}.oh-my-pi;
 
-        module = pkgs.callPackage ./tests/module.nix { };
+        module = pkgs.callPackage ./tests/module.nix {
+          hmModule = self.homeManagerModules.default;
+        };
 
         formatting =
           pkgs.runCommand "check-formatting"

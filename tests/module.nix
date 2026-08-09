@@ -3,6 +3,7 @@
   pkgs,
   runCommand,
   hello,
+  hmModule,
 }:
 
 let
@@ -29,7 +30,7 @@ let
     (lib.evalModules {
       modules = [
         stubHomeManager
-        ../module.nix
+        hmModule
         module
       ];
     }).config;

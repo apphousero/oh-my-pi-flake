@@ -7,47 +7,81 @@ on:
     inputs:
       version:
         description: Release version to pin (defaults to the latest release)
+        type: string
         required: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  update:
+  resolve:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.bump.outputs.changed }}
+      version: ${{ steps.bump.outputs.version }}
+      digest: ${{ steps.bump.outputs.digest }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
 
       - name: rewrite package.nix
+        id: bump
         env:
+          VERSION: ${{ inputs.version }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: nix run .#update -- ${{ inputs.version }}
-
-      - name: detect change
-        id: diff
         run: |
+          nix run .#update -- "$VERSION"
+          echo "version=$(sed -n 's/^  version = "\(.*\)";$/\1/p' package.nix)" >>"$GITHUB_OUTPUT"
+          echo "digest=$(nix-hash --type sha256 --flat package.nix)" >>"$GITHUB_OUTPUT"
           if git diff --quiet -- package.nix; then
             echo "changed=false" >>"$GITHUB_OUTPUT"
           else
             echo "changed=true" >>"$GITHUB_OUTPUT"
-            echo "version=$(sed -n 's/^  version = "\(.*\)";$/\1/p' package.nix)" >>"$GITHUB_OUTPUT"
           fi
 
-      - name: flake check
-        if: steps.diff.outputs.changed == 'true'
-        run: nix flake check -L
+  verify:
+    needs: resolve
+    if: needs.resolve.outputs.changed == 'true'
+    uses: ./.github/workflows/check.yml
+    with:
+      version: ${{ needs.resolve.outputs.version }}
+      digest: ${{ needs.resolve.outputs.digest }}
 
-      - uses: peter-evans/create-pull-request@v7
-        if: steps.diff.outputs.changed == 'true'
+  pull-request:
+    needs: [resolve, verify]
+    if: needs.resolve.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: rewrite package.nix
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+        run: |
+          nix run .#update -- "$VERSION"
+          actual=$(nix-hash --type sha256 --flat package.nix)
+          if [ "$actual" != "$DIGEST" ]; then
+            echo "package.nix hashes to $actual, run resolved $DIGEST; upstream assets moved mid-run" >&2
+            exit 1
+          fi
+
+      - uses: peter-evans/create-pull-request@v8
         with:
           branch: update/oh-my-pi
-          title: "oh-my-pi: ${{ steps.diff.outputs.version }}"
-          commit-message: "oh-my-pi: ${{ steps.diff.outputs.version }}"
+          add-paths: package.nix
+          title: "oh-my-pi: ${{ needs.resolve.outputs.version }}"
+          commit-message: "oh-my-pi: ${{ needs.resolve.outputs.version }}"
+          delete-branch: true
           body: |
             Hashes taken from the upstream `SHA256SUMS.txt` for
-            [v${{ steps.diff.outputs.version }}](https://github.com/can1357/oh-my-pi/releases/tag/v${{ steps.diff.outputs.version }}).
+            [v${{ needs.resolve.outputs.version }}](https://github.com/can1357/oh-my-pi/releases/tag/v${{ needs.resolve.outputs.version }}).
 
-            `nix flake check` passed on x86_64-linux; the other three systems are covered by the PR's own check run.
-          delete-branch: true
+            The `check` matrix already ran against this exact content on every supported system in
+            [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            Pull requests opened with `GITHUB_TOKEN` cannot trigger workflows, so this PR will
+            show no checks of its own.

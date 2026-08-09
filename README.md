@@ -93,7 +93,7 @@ With Home Manager as a NixOS module and `home-manager.useGlobalPkgs = true`, set
 
 ## Updating the pinned release
 
-`update.sh` rewrites `version` and all four asset hashes in `package.nix` from the release's published
+`update.sh` rewrites `version` and every asset hash in `package.nix` from the release's published
 `SHA256SUMS.txt` — no multi-hundred-megabyte prefetch:
 
 ```console
@@ -101,10 +101,13 @@ $ nix run .#update           # latest release
 $ nix run .#update -- 17.2.9 # a specific one
 ```
 
-A scheduled workflow runs it daily and opens a PR when upstream moves.
+A scheduled workflow runs it daily, builds the result on every supported system, and only then opens a PR.
 
 ## Checks
 
 `nix flake check` builds the package (its `installCheck` asserts `omp --version` and runs `omp --smoke-test`),
 evaluates the Home Manager module against a stub, and verifies formatting. `nix fmt` formats the tree; `nix develop`
 provides the Nix toolchain.
+
+CI runs the same `nix flake check` on `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. `x86_64-darwin` is not
+supported — nixpkgs is retiring the platform; use Rosetta.
