@@ -1,0 +1,53 @@
+name: update
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to pin (defaults to the latest release)
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - name: rewrite package.nix
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: nix run .#update -- ${{ inputs.version }}
+
+      - name: detect change
+        id: diff
+        run: |
+          if git diff --quiet -- package.nix; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+            echo "version=$(sed -n 's/^  version = "\(.*\)";$/\1/p' package.nix)" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: flake check
+        if: steps.diff.outputs.changed == 'true'
+        run: nix flake check -L
+
+      - uses: peter-evans/create-pull-request@v7
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          branch: update/oh-my-pi
+          title: "oh-my-pi: ${{ steps.diff.outputs.version }}"
+          commit-message: "oh-my-pi: ${{ steps.diff.outputs.version }}"
+          body: |
+            Hashes taken from the upstream `SHA256SUMS.txt` for
+            [v${{ steps.diff.outputs.version }}](https://github.com/can1357/oh-my-pi/releases/tag/v${{ steps.diff.outputs.version }}).
+
+            `nix flake check` passed on x86_64-linux; the other three systems are covered by the PR's own check run.
+          delete-branch: true
