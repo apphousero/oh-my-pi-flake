@@ -1,0 +1,87 @@
+name: update
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to pin (defaults to the latest release)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.bump.outputs.changed }}
+      version: ${{ steps.bump.outputs.version }}
+      digest: ${{ steps.bump.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: rewrite package.nix
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nix run .#update -- "$VERSION"
+          echo "version=$(sed -n 's/^  version = "\(.*\)";$/\1/p' package.nix)" >>"$GITHUB_OUTPUT"
+          echo "digest=$(nix-hash --type sha256 --flat package.nix)" >>"$GITHUB_OUTPUT"
+          if git diff --quiet -- package.nix; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+
+  verify:
+    needs: resolve
+    if: needs.resolve.outputs.changed == 'true'
+    uses: ./.github/workflows/check.yml
+    with:
+      version: ${{ needs.resolve.outputs.version }}
+      digest: ${{ needs.resolve.outputs.digest }}
+
+  pull-request:
+    needs: [resolve, verify]
+    if: needs.resolve.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: rewrite package.nix
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+        run: |
+          nix run .#update -- "$VERSION"
+          actual=$(nix-hash --type sha256 --flat package.nix)
+          if [ "$actual" != "$DIGEST" ]; then
+            echo "package.nix hashes to $actual, run resolved $DIGEST; upstream assets moved mid-run" >&2
+            exit 1
+          fi
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          branch: update/oh-my-pi
+          add-paths: package.nix
+          title: "oh-my-pi: ${{ needs.resolve.outputs.version }}"
+          commit-message: "oh-my-pi: ${{ needs.resolve.outputs.version }}"
+          delete-branch: true
+          body: |
+            Hashes taken from the upstream `SHA256SUMS.txt` for
+            [v${{ needs.resolve.outputs.version }}](https://github.com/can1357/oh-my-pi/releases/tag/v${{ needs.resolve.outputs.version }}).
+
+            The `check` matrix already ran against this exact content on every supported system in
+            [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            Pull requests opened with `GITHUB_TOKEN` cannot trigger workflows, so this PR will
+            show no checks of its own.

@@ -7,24 +7,20 @@
 
 let
   pname = "oh-my-pi";
-  version = "17.2.10";
+  version = "17.2.12";
 
   sources = {
     x86_64-linux = {
       asset = "omp-linux-x64";
-      hash = "sha256-T+VksjSCzWJ2caJBeEJJjJey9ytfijpO+4CU5iPfejM=";
+      hash = "sha256-bHUzG/CdWp6UM71ZKz7pk9dRoV1bdFDBozTMBoSZbzA=";
     };
     aarch64-linux = {
       asset = "omp-linux-arm64";
-      hash = "sha256-yTXV0l62d6Ylk0+B9LIbD/BbZEAP656Q8C8O/jlnY4Y=";
-    };
-    x86_64-darwin = {
-      asset = "omp-darwin-x64";
-      hash = "sha256-IGR/4Zqy5HRRZVXbXIE/XZrv/FVuRWzfnuiQB8ipi+8=";
+      hash = "sha256-8Xbt+BdNslKr4apuhN8oThuDuN1+80rH+veISl4XKkw=";
     };
     aarch64-darwin = {
       asset = "omp-darwin-arm64";
-      hash = "sha256-43+j1NPusVtx1bRk/eUfkT45CXikjcM7TFJ7ju1yN8Y=";
+      hash = "sha256-q0/yTIujrm/Z1LVJaclPRAjMMWZ19VNHKa5QLYyX33Q=";
     };
   };
 
@@ -32,9 +28,7 @@ let
 
   source =
     sources.${system}
-      or (throw "oh-my-pi: no prebuilt binary for system '${system}'; supported: ${
-        lib.concatStringsSep ", " (lib.attrNames sources)
-      }");
+      or (throw "oh-my-pi: no prebuilt binary for system '${system}'; supported: ${lib.concatStringsSep ", " (lib.attrNames sources)}");
 in
 stdenvNoCC.mkDerivation {
   inherit pname version;
@@ -78,6 +72,5 @@ stdenvNoCC.mkDerivation {
     mainProgram = "omp";
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
     platforms = lib.attrNames sources;
-    maintainers = [ ];
   };
 }
