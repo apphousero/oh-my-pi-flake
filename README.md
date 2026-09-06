@@ -101,7 +101,7 @@ $ nix run .#update           # latest release
 $ nix run .#update -- 17.2.9 # a specific one
 ```
 
-A scheduled workflow runs it daily, builds the result on every supported system, and only then opens a PR.
+A scheduled workflow runs it daily, builds the result on both Linux systems, and only then opens a PR.
 
 ## Checks
 
@@ -109,5 +109,7 @@ A scheduled workflow runs it daily, builds the result on every supported system,
 evaluates the Home Manager module against a stub, and verifies formatting. `nix fmt` formats the tree; `nix develop`
 provides the Nix toolchain.
 
-CI runs the same `nix flake check` on `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. `x86_64-darwin` is not
-supported — nixpkgs is retiring the platform; use Rosetta.
+CI runs the same `nix flake check` on `x86_64-linux` and `aarch64-linux`. `aarch64-darwin` is packaged and
+exported — the flake's `packages`, `checks`, `apps`, and `devShells` all cover it — but no macOS runner builds it,
+so it is verified by evaluation only. `x86_64-darwin` is not supported: nixpkgs is retiring the platform; use
+Rosetta.

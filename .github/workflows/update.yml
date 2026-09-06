@@ -81,7 +81,7 @@ jobs:
             Hashes taken from the upstream `SHA256SUMS.txt` for
             [v${{ needs.resolve.outputs.version }}](https://github.com/can1357/oh-my-pi/releases/tag/v${{ needs.resolve.outputs.version }}).
 
-            The `check` matrix already ran against this exact content on every supported system in
+            The `check` matrix already ran against this exact content on `x86_64-linux` and `aarch64-linux` in
             [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
             Pull requests opened with `GITHUB_TOKEN` cannot trigger workflows, so this PR will
             show no checks of its own.
