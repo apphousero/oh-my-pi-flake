@@ -7,20 +7,20 @@
 
 let
   pname = "oh-my-pi";
-  version = "18.11.0";
+  version = "18.11.1";
 
   sources = {
     x86_64-linux = {
       asset = "omp-linux-x64";
-      hash = "sha256-wjpYrYqS9Oc4qhLckE87ChrHA1uVO5v105txoiYXn28=";
+      hash = "sha256-vx6GqTWx6iYWalKAAB7M6hIF5sIe/htYU/D9Nox1SXQ=";
     };
     aarch64-linux = {
       asset = "omp-linux-arm64";
-      hash = "sha256-KZ4LY8SC148A8rrnUACBWtaJDLYZLLyfZsjZjpznC4A=";
+      hash = "sha256-tujhOlTV+js3QDOzV3jZ4NmLs1CtgNA8GDmDUg6fLbE=";
     };
     aarch64-darwin = {
       asset = "omp-darwin-arm64";
-      hash = "sha256-hf5qua7FWnlNlghgIRNklfdhPWscjysIwFhA1oIzcWo=";
+      hash = "sha256-vesWJrmdwp2EQUbqeUDTZ+YbEDK3fhx3iAEl83nKLdo=";
     };
   };
 
